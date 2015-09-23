@@ -1,0 +1,9 @@
+<?php
+
+/**
+ * Implements hook_uninstall().
+ */
+function datas_truncate_uninstall()
+{
+    variable_del('truncates_datas_save');
+}

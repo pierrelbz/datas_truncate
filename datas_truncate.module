@@ -1,0 +1,240 @@
+<?php
+// datas_truncate
+
+
+/**
+ * Implements hook_menu().
+ */
+function datas_truncate_menu()
+{
+    $items = array();
+    $items['admin/content/datas_truncate'] = array(
+        'title' => 'Mass Truncate nodes, user or terms',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('datas_truncate_form'),
+        'access callback' => TRUE,
+        'description' => 'Delete all',
+        'type' => MENU_NORMAL_ITEM,
+    );
+
+    return $items;
+
+}
+
+
+function datas_truncate_form($form, &$form_state)
+{
+
+
+    //dsm(variable_get('truncates_datas_save'));
+// path to return to if "cancel" is pressed
+
+    // create a form with a "confirm" step.
+    // Initial form first:
+
+    if (!isset($form_state['storage']['confirm'])) {
+        $node_types = node_type_get_types();
+        $vocabularies = taxonomy_get_vocabularies();
+        $roles = user_roles();
+        foreach ($node_types as $node_type) {
+            $options_node[$node_type->type] = array(
+                'type' => $node_type->type,
+                'name' => $node_type->name,
+                'count' => count(_retrieve_node($node_type->type))
+            );
+            $node_types_val[$node_type->type] = $node_type->name . '(' . $node_type->type . ') ' . count(_retrieve_node($node_type->type));
+        }
+        $header = array(
+            'type' => t('machine name of type'),
+            'name' => t('name'),
+            'count' => t('number of node')
+        );
+
+        $form['node'] = array(
+            '#type' => 'tableselect',
+            '#header' => $header,
+            '#options' => $options_node,
+            '#empty' => t('No users found'),
+            '#prefix' => 'NODES'
+        );
+        foreach ($vocabularies as $vocabulary) {
+            $options_voc[$vocabulary->vid] = array(
+                'vid' => $vocabulary->vid,
+                'name' => $vocabulary->name,
+                'machine_name' => $vocabulary->machine_name,
+                'count' => count(_retrieve_term($vocabulary->vid)),
+            );
+        }
+        $header = array(
+            'vid' => t('Vid'),
+            'name' => t('Name'),
+            'machine_name' => t('Machine name'),
+            'count' => t('Number of term of taxonomy')
+
+        );
+
+        $form['vocabulary'] = array(
+            '#type' => 'tableselect',
+            '#header' => $header,
+            '#options' => $options_voc,
+            '#empty' => t('No vocabulary found'),
+            '#prefix' => t('vocabulary')
+        );
+
+        unset($roles[0]);
+        foreach ($roles as $k => $v) {
+            $roles[$k] = $v . ' - ' . count(_retrieve_user($k));
+            $optionroles[$k] = array(
+                'rid' => $k,
+                'name' => $v,
+                'count' => count(_retrieve_user($k))
+            );
+        }
+        $header = array(
+            'rid' => t('Vid'),
+            'name' => t('Name'),
+            'count' => t('Number users in role')
+
+        );
+        $form['roles'] = array(
+            '#type' => 'tableselect',
+            '#header' => $header,
+            '#options' => $optionroles,
+            '#empty' => t('No users found'),
+            '#prefix' => 'Role'
+        );
+
+        $form['remember_choice'] = array(
+            '#title' => t('Remember  choice'),
+            '#type' => 'checkbox',
+            '#value' => '1',
+
+        );
+
+// create a confirm form:
+        return confirm_form($form,
+            $question = "Do you really want to make the change?",
+            current_path(),
+            $description = "Warning, this is the last step before form gets submitted",
+            $yes = t("Do you really want to delete these datas ?"));
+    } else {
+        $form['submit'] = array(
+            '#type' => 'submit',
+            '#value' => 'Submit',
+        );
+        return $form;
+    }
+
+}
+
+
+
+function datas_truncate_form_submit($form, $form_state)
+{
+ /*   if (!isset($form_state['storage']['confirm'])) {
+        $form_state['storage']['confirm'] = TRUE;
+    }else{*/
+        $values = $form_state['values'];
+        $values['roles'] = array_filter($values['roles']);
+        $values['node'] = array_filter($values['node']);
+        $values['vocabulary'] = array_filter($values['vocabulary']);
+        $operations = array();
+        if ($values['remember_choice'] == 1) {
+            variable_set('truncates_datas_save', array(
+                'roles' => $values['roles'],
+                'node' => $values['node'],
+                'vocabulary' => $values['vocabulary'],
+            ));
+        } else {
+            variable_del('truncates_datas_save');
+        }
+
+        foreach ($values['node'] as $k => $v) {
+            if ($k === $v) {
+                $nids = _retrieve_node($v);
+                foreach ($nids as $nid) {
+                    $operations[] = array(
+                        'delete_node',
+                        array($nid),
+                    );
+                }
+            }
+        }
+
+        foreach ($values['vocabulary'] as $k => $v) {
+            if ($k === $v) {
+                $operations[]['delete_term_in_vocabulary'] = array($v);
+            }
+            if ($k == $v) {
+                $tids = _retrieve_term($v);
+                foreach ($tids as $tid) {
+                    $operations[] = array(
+                        'delete_term',
+                        array($tid),
+                    );
+                }
+            }
+        }
+        foreach ($values['roles'] as $k => $v) {
+            if ((string)$k === $v) {
+                $uids = _retrieve_user($v);
+                foreach ($uids as $uid) {
+                    $operations[] = array(
+                        'delete_user',
+                        array($uid),
+                    );
+                }
+            }
+        }
+        if (!empty($operations)) {
+            $batch = array(
+                'operations' => $operations,
+                'title' => t('Processing delete Batch'),
+            );
+            batch_set($batch);
+        }
+    /*}*/
+}
+
+function delete_node($nids)
+{
+    if(!is_array($nids)){
+        $nids=array($nids);
+    }
+    node_delete_multiple($nids);
+}
+
+function delete_term($tid)
+{
+    return taxonomy_term_delete($tid);
+}
+
+function delete_user($uid)
+{
+    return user_delete($uid);
+}
+
+function _retrieve_user($rid)
+{
+    $sql = 'SELECT uid FROM {users_roles} WHERE rid = :rid';
+    $q = db_query($sql, array(':rid' => $rid))->fetchCol();
+    return $q;
+}
+
+function _retrieve_node($type)
+{
+    $sql = 'SELECT nid FROM {node} WHERE type = :type';
+    $q = db_query($sql, array(':type' => $type))->fetchCol();
+    return $q;
+}
+
+function _retrieve_term($vid)
+{
+    $sql = 'SELECT tid FROM {taxonomy_term_data} WHERE vid = :vid';
+    $q = db_query($sql, array(':vid' => $vid))->fetchCol();
+    return $q;
+}
+
+
+
+

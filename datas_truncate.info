@@ -1,0 +1,4 @@
+name = Datas truncate
+description = Delete some datas by type : Nodes by node type, Users by role and Terms by vocabulary.
+package = Development
+core = 7.x
