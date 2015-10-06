@@ -196,7 +196,6 @@ function datas_truncate_form_submit($form, $form_state)
             );
             batch_set($batch);
         }
-    /*}*/
 }
 
 function delete_node($nids)
@@ -222,9 +221,9 @@ function delete_user($uid)
 
 function _retrieve_user($rid)
 {
-global $user;
-$exclude_uid=array($user->uid=>$user->uid, 0=>0, 1=>1)
-    $sql = 'SELECT uid FROM {users_roles} WHERE rid = :rid and not uid in :exclude_uid';
+    global $user;
+    $exclude_uid=array($user->uid=>$user->uid, 0=>0, 1=>1);
+    $sql = 'SELECT uid FROM {users_roles} WHERE rid = :rid and not uid in (:exclude_uid)';
     $q = db_query($sql, array(':rid' => $rid,':exclude_uid'=>$exclude_uid))->fetchCol();
     return $q;
 }
