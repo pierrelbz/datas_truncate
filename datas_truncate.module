@@ -175,14 +175,17 @@ function datas_truncate_form_submit($form, $form_state)
                 }
             }
         }
+	global $user;
         foreach ($values['roles'] as $k => $v) {
             if ((string)$k === $v) {
                 $uids = _retrieve_user($v);
                 foreach ($uids as $uid) {
+		if($user-uid!=$uid && $uid>1){	
                     $operations[] = array(
                         'delete_user',
                         array($uid),
                     );
+		}
                 }
             }
         }
@@ -211,13 +214,18 @@ function delete_term($tid)
 
 function delete_user($uid)
 {
-    return user_delete($uid);
+	global $user;
+    if($user->uid!=$uid && $uid>1){	
+ 	   return user_delete($uid);
+}
 }
 
 function _retrieve_user($rid)
 {
-    $sql = 'SELECT uid FROM {users_roles} WHERE rid = :rid';
-    $q = db_query($sql, array(':rid' => $rid))->fetchCol();
+global $user;
+$exclude_uid=array($user->uid=>$user->uid, 0=>0, 1=>1)
+    $sql = 'SELECT uid FROM {users_roles} WHERE rid = :rid and not uid in :exclude_uid';
+    $q = db_query($sql, array(':rid' => $rid,':exclude_uid'=>$exclude_uid))->fetchCol();
     return $q;
 }
 
