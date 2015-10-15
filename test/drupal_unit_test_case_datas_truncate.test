@@ -1,0 +1,13 @@
+<?php
+class TravisDrupalModuledatas_truncateDrupalUnitTestCase extends DrupalUnitTestCase {
+    public static function getInfo() {
+        return array(
+            'name' => 'datas_truncate Drupal Unit Test Case',
+            'group' => 'Travis-CI Drupal Module datas_truncate',
+        );
+    }
+
+    public function testAssertTrue() {
+        $this->assert(true);
+    }
+}
