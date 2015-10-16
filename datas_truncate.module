@@ -90,7 +90,7 @@ function datas_truncate_form($form, &$form_state)
             );
         }
         $header = array(
-            'rid' => t('Vid'),
+            'rid' => t('Rid'),
             'name' => t('Name'),
             'count' => t('Count')
 
@@ -102,6 +102,22 @@ function datas_truncate_form($form, &$form_state)
             '#empty' => t('No users found'),
             '#prefix' => t('Users by roles')
         );
+        $header = array(
+            'field'=>t('Field name'),
+            'label'=>t('intitulé'),
+            'type'=>t('Field type'),
+            'bundle'=>t('Used in'),
+            'entity_type'=>t('Entity type'),
+            );
+        $form['fields'] =
+        array(
+            '#type' => 'tableselect',
+            '#header' => $header,
+            '#options' => _retrieve_fields_form(),
+            '#empty' => t('No fields found'),
+            '#prefix' => t('Fields')
+        );
+
 
         $form['remember_choice'] = array(
             '#title' => t('Remember this choice'),
@@ -123,6 +139,7 @@ function datas_truncate_form($form, &$form_state)
         $values['roles'] = array_filter($values['roles']);
         $values['node'] = array_filter($values['node']);
         $values['vocabulary'] = array_filter($values['vocabulary']);
+        $values['fields'] = array_filter($values['fields']);
         foreach($values['node'] as $node_type){
             $content.= "<br/>".t("Delete node type :type_node",array(":type_node" => $node_types[$node_type]->name));
         }
@@ -131,6 +148,14 @@ function datas_truncate_form($form, &$form_state)
         }
         foreach($values['roles'] as $role_id){
             $content.= "<br/>".t("Delete user in role :role",array(":role" => $roles[$role_id]));
+        }
+        foreach($values['fields'] as $field){
+            $f = explode("#", $field);
+            if ($f) {
+                $field_name = $f[0];
+                $bundle = $f[1];
+                $content .= "<br/>" . t("Delete data fields :fieldname in :bundle", array(":fieldname" => $field_name,':bundle'=>$bundle));
+            }
         }
         $content.= "<br/>".t("Datas will be deleted if you grant rights for this.");
 
@@ -171,6 +196,7 @@ function datas_truncate_form_submit($form, &$form_state)
                 'roles' => $values['roles'],
                 'node' => $values['node'],
                 'vocabulary' => $values['vocabulary'],
+                'fields' => $values['fields'],
             ));
         } else {
             variable_del('truncates_datas_save');
@@ -216,6 +242,23 @@ function datas_truncate_form_submit($form, &$form_state)
                 }
             }
         }
+        foreach ($values['fields'] as $k => $v) {
+            if ((string)$k === $v) {
+                $f = explode("#", $v);
+                if ($f) {
+                    $field_name = $f[0];
+                    $bundle = $f[1];
+                    $entity_type = $f[2];
+                    $ids = _retrieve_fields($entity_type,$field_name, $bundle);
+                    foreach ($ids as $id) {
+                        $operations[] = array(
+                            'delete_field',
+                            array($id, $field_name, $bundle),
+                        );
+                    }
+                }
+            }
+        }
         if (!empty($operations)) {
             $batch = array(
                 'operations' => $operations,
@@ -226,74 +269,7 @@ function datas_truncate_form_submit($form, &$form_state)
     }
 }
 
-function datas_truncate_form_submit_old($form, $form_state)
-{
-    /*   if (!isset($form_state['storage']['confirm'])) {
-           $form_state['storage']['confirm'] = TRUE;
-       }else{*/
-    $values = $form_state['values'];
-    $values['roles'] = array_filter($values['roles']);
-    $values['node'] = array_filter($values['node']);
-    $values['vocabulary'] = array_filter($values['vocabulary']);
-    $operations = array();
-    if ($values['remember_choice'] == 1) {
-        variable_set('truncates_datas_save', array(
-            'roles' => $values['roles'],
-            'node' => $values['node'],
-            'vocabulary' => $values['vocabulary'],
-        ));
-    } else {
-        variable_del('truncates_datas_save');
-    }
 
-    foreach ($values['node'] as $k => $v) {
-        if ($k === $v) {
-            $nids = _retrieve_node($v);
-            foreach ($nids as $nid) {
-                $operations[] = array(
-                    'delete_node',
-                    array($nid),
-                );
-            }
-        }
-    }
-
-    foreach ($values['vocabulary'] as $k => $v) {
-        if ($k === $v) {
-            $operations[]['delete_term_in_vocabulary'] = array($v);
-        }
-        if ($k == $v) {
-            $tids = _retrieve_term($v);
-            foreach ($tids as $tid) {
-                $operations[] = array(
-                    'delete_term',
-                    array($tid),
-                );
-            }
-        }
-    }
-    global $user;
-    foreach ($values['roles'] as $k => $v) {
-        if ((string)$k === $v) {
-            $uids = _retrieve_user($v);
-            foreach ($uids as $uid) {
-                if($user-uid!=$uid && $uid>1){
-                    $operations[] = array(
-                        'delete_user',
-                        array($uid),
-                    );
-                }
-            }
-        }
-    }
-    if (!empty($operations)) {
-        $batch = array(
-            'operations' => $operations,
-            'title' => t('Processing delete Batch'),
-        );
-        batch_set($batch);
-    }
-}
 
 function delete_node($nids)
 {
@@ -320,6 +296,9 @@ function delete_user($uid)
         return user_delete($uid);
     }
 }
+function delete_field($id,$entity_type, $bundle){
+    entity_delete_multiple($entity_type, array($id));
+}
 
 function _retrieve_user($rid)
 {
@@ -345,5 +324,50 @@ function _retrieve_term($vid)
 }
 
 
+function  _retrieve_fields($entity_type,$field_name, $bundle)
+{
+    $info = entity_get_info($entity_type);
+    return $q;
+}
+
+
+/**
+ *  copy from field_ui_fields_list
+ */
+function  _retrieve_fields_form() {
+    $instances = field_info_instances();
+    $field_types = field_info_field_types();
+    $bundles = field_info_bundles();
+
+    $modules = system_rebuild_module_data();
+
+
+    $rows = array();
+    foreach ($instances as $entity_type => $type_bundles) {
+        foreach ($type_bundles as $bundle => $bundle_instances) {
+            foreach ($bundle_instances as $field_name => $instance) {
+                $field = field_info_field($field_name);
+                $field_name_row = $field_name ."#".$bundle.'#'.$entity_type;
+                // Initialize the row if we encounter the field for the first time.
+
+                    $rows[$field_name_row]['field'] = $field['locked'] ? t('@field_name (Locked)',
+                        array('@field_name' => $field_name)) : $field_name;
+                    $module_name = $field_types[$field['type']]['module'];
+                    $rows[$field_name_row]['type'] = $module_name. ' -  ' .
+                       $field_types[$field['type']]['label'] . ' ' .
+                        t('(module: !module)', array('!module' => $modules[$module_name]->info['name']));
+
+
+                $rows[$field_name_row]['bundle'] =   $bundles[$entity_type][$bundle]['label'];
+                $rows[$field_name_row]['label'] =   $instance['label'];
+                $rows[$field_name_row]['entity_type'] =   $entity_type;
+            }
+        }
+    }
+        ksort($rows);
+
+    return $rows;
+
+}
 
 
